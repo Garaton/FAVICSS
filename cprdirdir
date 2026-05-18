@@ -1,0 +1,85 @@
+#!/bin/bash
+set -uo pipefail
+
+# MAKING SURE
+if ! [[ "${1-default}" == *"-"*"y"* ]] then
+	if ! [[ "${1-default}" == *"-"*"v"* ]] then
+		echo "This will change images, and audio, found within:"
+	else
+		echo "This will change images, audio, and videos, found within:"
+	fi
+	echo "$(ls -d */)"
+	read -p "Are you sure you wish to proceed (y/n): " input
+	if ! [[ "$input" == "y" ]] then
+		exit
+	fi
+fi
+
+
+# Kill in case
+killProcs() {
+	while true
+	do
+		read -p "Do you want to kill the processes (y/n/exit): " doWeKill
+		if [[ "$doWeKill" == "exit" ]] then
+			return
+		elif [[ "$doWeKill" == "y" ]] then
+			for pid in ${pids[*]}
+			do
+				kill $pid
+			done
+			return
+		fi
+	done
+}
+
+
+# Managing flags
+flags="-y"
+if [[ "${1-default}" == *"-"*"v"* ]] then
+	flags=$flags"v"
+fi
+if [[ "${1-default}" == *"-"*"c"* ]] then
+	flags=$flags"c"
+fi
+if [[ "${1-default}" == *"-"*"q"* ]] then
+	flags=$flags"q "$2
+fi
+
+# Starting cprs
+i=0
+pids=()
+pid=""
+goOn=true
+while read dir
+do
+	# This will prompt us for each directory
+	if [[ "${1-default}" == *"-"*"n"* ]] then
+		read -p "Do you want to compress $dir (y/n): " yesNo
+		if ! [[ $yesNo == "y" ]] then
+			goOn=false
+		fi
+	fi
+	# Checking if we're doing this directory
+	if [[ $goOn == true ]] then
+		cd "${dir///}" # remove all instances of /
+		cprdir $flags & pid=$!
+		pids[${i}]=$pid
+		i=$((i + 1))
+		cd .. # Leave
+	fi
+done < <(ls -1 -d */ )
+
+# Failsafe to kill processes
+# killProcs & # Doesn't work
+
+# Wait for all to be completed
+#	TODO make this work
+for pid in ${pids[*]}
+do
+    wait $pid
+done
+
+echo "Finished Compressing"
+
+exit

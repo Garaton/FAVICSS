@@ -1,0 +1,37 @@
+#!/bin/bash
+
+# two parameters, directory 1 and 2, they share the exact same file structure
+# $2 has the same name as $1 but has a leading _
+# Move all smaller equal files in $2 into $1
+
+
+# Doing cancellation checks
+if [[ -z $2 ]] then
+	echo "Usage:	cmpdir dir1 dir2"
+	exit
+fi
+
+if ! [[ "$2" == "_$1" ]] then
+	echo "dir2 must be dir1 plus an underscore."
+	echo "IE: 	dir1=$1	dir2=_$1"
+	exit
+fi
+
+read -p "This will destroy $2 are you sure (y/n): " input
+
+if ! [[ "$input" == "y" ]] then
+	exit
+fi
+
+
+# Moving over smaller files
+find "$1/"** -type f | while read file
+do
+	f1="$(find $1 | grep "$file")"
+	f2="$(find $2 | grep "$file")"
+
+	# If $f2 is smaller move it to $f1
+	if [[ $(stat -c%s "$f2") < $(stat -c%s "$f1") ]] then
+		mv "$f2" "$f1"
+	fi
+done
