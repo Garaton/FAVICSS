@@ -7,7 +7,8 @@ if [[ "$1" == *"-"*"h"* ]] then
 	echo "Flags:"
 	echo "	h - Help"
 	echo "	y - Force yes"
-	echo "	v - Also do videos"
+	echo "	v - Include videos (videos take a while)"
+	echo "	f - Include fonts (requires fontconv)"
 	echo "	q - Check for Quality #"
 	echo "		Quality #: Used by ffmpeg for images"
 	echo "	c - Uses more cores to try and compress files more"
@@ -51,11 +52,17 @@ minTmp() {
 
 # Parameter checks
 qual=25
-if [[ "$1" == *"-"*"q"* ]] && ! [[ -z $2 ]] then
+if [[ "$1" == *"-"*"q"* ]] && ! [[ -z $2 ]]; then
 	qual=$2
 fi
-
-
+do_vid=false
+if [[ "$1" == *"-"*"v"* ]]; then
+	do_vid=true
+fi
+do_font=false
+if [[ "$1" == *"-"*"f"* ]]; then
+	do_font=true
+fi
 
 
 
@@ -107,11 +114,17 @@ do
 		EXT=".ogg"
 	
 	# Video Case
-	elif [[ "$f" == *".webm"* ]] && [[ "$1" == *"-"*"v"* ]] then
+	elif $do_vid && [[ "$f" == *".webm"* ]] then
 		echo "Compressing Video: $f"
 		ffmpeg -i "$f" -c:v libvpx -b:v 1M -crf 30 -c:a libopus "temp/1.webm" -loglevel error -y < /dev/null
 		CMP=1
 		EXT=".webm"
+
+	# Font Case
+	elif $do_font && [[ "$f" == *".ttf"* ]] then
+		fontconv "$f" "temp/1.otf"
+		CMP=1
+		EXT=".otf"
 	fi
 
 	# If we compressed and it's smaller replace
