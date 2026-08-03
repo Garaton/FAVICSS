@@ -7,6 +7,7 @@ if [[ "$1" == *"-"*"h"* ]] then
 	echo "Flags:"
 	echo "	h - Help"
 	echo "	y - Force yes"
+	echo "	b - Compress in a different directory (copies the entire directory over)"
 	echo "	v - Include videos (videos take a while)"
 	echo "	f - Include fonts (requires fontconv)"
 	echo "	q - Check for Quality #"
@@ -19,19 +20,28 @@ fi
 
 # Cancellation checks
 # If we skip, skip
-if ! [[ "$1" == *"-"*"y"* ]] then
+if ! [[ "$1" == *"-"*"y"* ]] && ! [[ "$1" == *"-"*"b"* ]] then
 	echo "This will change images, audio, and maybe videos, found within:"
 	echo "	$(pwd)"
 	read -p "Are you sure you wish to proceed (y/n): " input
 
 	if ! [[ "$input" == "y" ]] then
+		echo "You can run this again with flag \"b\" to instead do all operations in a separate directory, thereby maintaining all of the original files."
 		exit
 	fi
 fi
 
-
 # Setting up temp directory name
 tempdir="temp-compressing-$RANDOM"
+pwd_val=$(pwd)
+dir_name="${pwd_val##*/}-compressed"
+
+if [[ "$1" == *"-"*"b"* ]] then
+	# Copy this directory into dir_name, we override already existing compressed dirs
+	cp -r . "../$dir_name"
+	cd "../$dir_name"
+fi
+
 
 # Setting up functions
 # Find smallest value in tmp, or $f
