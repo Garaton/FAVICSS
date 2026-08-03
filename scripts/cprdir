@@ -62,12 +62,17 @@ do_vid=false
 if [[ "$1" == *"-"*"v"* ]] then
 	do_vid=true
 fi
+
 do_font=false
 if [[ "$1" == *"-"*"f"* ]] then
-	do_font=true
+	font_which="$(which fontconv)" # I give up on trying to remove this error output
+	if [[ -z $font_which ]] then
+		echo "Dependency \"fontconv\" not found if you wish to compress fonts please refer to README.md."
+		echo "	Continuing without font compression."
+	else
+		do_font=true
+	fi
 fi
-
-
 
 
 
