@@ -27,6 +27,11 @@ that program will look at the unique file header to know what the file actually
 is. This allows us to compress everything into a webp, and keep original names
 to avoid breaking things that use the files by their name.
 
+## Dependencies
+
+- [ffmpeg](https://ffmpeg.org/download.html)
+- [fontconv](https://github.com/marmooo/fontconv)
+
 ## Contents
 
 Currently there are 3 shell scripts:
@@ -50,6 +55,7 @@ Flags:
 - h: Help
 - y: Ignores prompts and automatically says yes
 - v: Include videos (videos take a while)
+- f: Include fonts (requires fontconv)
 - q: Manual quality # for images
   - Quality #: Used by ffmpeg for images
 - c: Tries multiple ffmpeg setups to see which one compresses the file best
