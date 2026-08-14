@@ -27,7 +27,7 @@ if [[ -z "$(command -v ffmpeg)" ]]; then
 fi
 
 # Ask the user if they really want to do this
-if [[ "$1" != *"-"*"y"*  && "$1" != *"-"*"b"* ]]; then
+if [[ "$1" != "-"*"y"*  && "$1" != "-"*"b"* ]]; then
 	echo "This will change images, audio, and maybe videos, found within:"
 	echo "	$(pwd)"
 	read -p "Are you sure you wish to proceed (y/n): " input
@@ -43,7 +43,7 @@ tempdir="temp-compressing-$RANDOM"
 pwd_val=$(pwd)
 dir_name="${pwd_val##*/}-compressed"
 
-if [[ "$1" == *"-"*"b"* ]]; then
+if [[ "$1" == "-"*"b"* ]]; then
 	# Copy this directory into dir_name, we override already existing compressed dirs
 	cp -r . "../$dir_name"
 	cd "../$dir_name"
@@ -75,7 +75,7 @@ minTmp() {
 
 # Parameter checks
 qual=25
-if [[ "$1" == *"-"*"q"* ]]; then
+if [[ "$1" == "-"*"q"* ]]; then
 	if [[ ! -z $2 ]]; then
 		qual=$2
 	else
@@ -84,15 +84,15 @@ if [[ "$1" == *"-"*"q"* ]]; then
 	fi
 fi
 do_vid=false
-if [[ "$1" == *"-"*"v"* ]]; then
+if [[ "$1" == "-"*"v"* ]]; then
 	do_vid=true
 fi
 dont_core_max=true
-if [[ "$1" == *"-"*"c"* ]]; then
+if [[ "$1" == "-"*"c"* ]]; then
 	dont_core_max=false
 fi
 do_font=false
-if [[ "$1" == *"-"*"f"* ]]; then
+if [[ "$1" == "-"*"f"* ]]; then
 	if [[ -z "$(command -v fontconv)" ]]; then
 		echo "Dependency \"fontconv\" not found if you wish to compress fonts please refer to README.md."
 		echo "	Continuing without font compression."
@@ -109,12 +109,13 @@ mkdir "$tempdir"
 find . -type f | while read f
 do
 	# Tracking variables
-	CMP=0 # Did we compress
-	EXT="" # What file format do we export it as
+	cmpr=0 # Did we compress
+	exp="" # What file format do we export it as
+	mime_type="$(file --mime-type -b "$f")"
 
 	# Compressing
 	# Image Case
-	if [[ "$f" == *".png" || "$f" == *".jpg" || "$f" == *".jpeg" || "$f" == *".jfif" || "$f" == *".webp" || "$f" == *".avif" || "$f" == .".jxl" ]]; then
+	if [[ "$mime_type" == "image/"* ]]; then
 		# Current Winner: webp, qual 25, comp 2: 21.3 -> 12.5 MB
 		#	0 quality does COMPRESS, but you don't notice 25 quality
 		if $dont_core_max; then
@@ -129,11 +130,11 @@ do
 			wait "$PID3"
 			wait "$PID4"
 		fi
-		CMP=1
-		EXT=".webp"
+		cmpr=1
+		ext=".webp"
 
 	# Audio Case
-	elif [[ "$f" == *".wav" || "$f" == *".flac" || "$f" == *".ogg" || "$f" == *".mp3" ]]; then
+	elif [[ "$mime_type" == "audio/"* ]]; then
 		# Current winner: ogg, -c:a libvorbis -ab 32k -ar 22050 -b:a 96k: 310.2 -> 93.8 MiB
 		if $dont_core_max; then
 			ffmpeg -i "$f" -c:a libvorbis -ab 32k -ar 22050 -b:a 96k "$tempdir/1.ogg" -loglevel error -y < /dev/null
@@ -143,25 +144,26 @@ do
 			wait "$PID1"
 			wait "$PID2"
 		fi
-		CMP=1
-		EXT=".ogg"
+		cmpr=1
+		ext=".ogg"
 	
 	# Video Case
-	elif $do_vid && [[ "$f" == *".webm" || "$f" == *".mp4" || "$f" == *".mov" ]]; then
+	elif $do_vid && [[ "$mime_type" == "video/"* ]]; then
 		echo "Compressing Video: $f"
 		ffmpeg -i "$f" -c:v libvpx -b:v 1M -crf 30 -c:a libopus "$tempdir/1.webm" -loglevel error -y < /dev/null
-		CMP=1
-		EXT=".webm"
+		cmpr=1
+		ext=".webm"
 
 	# Font Case
+	# Scrict because fontconv is scrict
 	elif $do_font && [[ "$f" == *".ttf" || "$f" == *".otf" ]]; then
 		fontconv "$f" "$tempdir/1.otf"
-		CMP=1
-		EXT=".otf"
+		cmpr=1
+		ext=".otf"
 	fi
 
 	# If we compressed and it's smaller replace
-	if [[ $CMP == 1 ]] then
+	if [[ $cmpr == 1 ]] then
 		# Get the smallest file
 		smallFile=$(minTmp)
 		if [[ "$smallFile" != "$f" ]]; then
