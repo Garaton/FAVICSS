@@ -40,8 +40,7 @@ fi
 
 # Setting up temp directory name
 tempdir="temp-compressing-$RANDOM"
-pwd_val=$(pwd)
-dir_name="${pwd_val##*/}-compressed"
+dir_name="${PWD##*/}-compressed"
 
 if [[ "$1" == "-"*"b"* ]]; then
 	# Copy this directory into dir_name, we override already existing compressed dirs
@@ -169,6 +168,10 @@ do
 		if [[ "$smallFile" != "$f" ]]; then
 			echo "Compressed: $f	$(stat -c%s "$f") -> $(stat -c%s "$smallFile")" # Print the file
 			mv "$smallFile" "$f"
+		fi
+		# Cleanup temp directory
+		if [[ ! -z $(ls "$tempdir") ]]; then
+			rm "$tempdir/"*
 		fi
 	fi
 done
