@@ -71,7 +71,7 @@ pids=()
 pid=""
 goOn=true
 # Cleanup
-trap "killProcs" EXIT
+trap "killProcs" SIGTERM
 while read dir
 do
 	# This will prompt us for each directory
