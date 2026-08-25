@@ -35,19 +35,11 @@ fi
 
 # Kill in case
 killProcs() {
-	while true
+	for pid in ${pids[*]}
 	do
-		read -p "Do you want to kill the processes (y/n/exit): " doWeKill
-		if [[ "$doWeKill" == "exit" ]]; then
-			return
-		elif [[ "$doWeKill" == "y" ]]; then
-			for pid in ${pids[*]}
-			do
-				kill $pid
-			done
-			return
-		fi
+		kill $pid
 	done
+	return
 }
 
 # Checking for backup
@@ -78,6 +70,8 @@ i=0
 pids=()
 pid=""
 goOn=true
+# Cleanup
+trap "killProcs" EXIT
 while read dir
 do
 	# This will prompt us for each directory
@@ -97,11 +91,8 @@ do
 	fi
 done < <(ls -1 -d */ )
 
-# Failsafe to kill processes
-# killProcs & # Doesn't work
 
 # Wait for all to be completed
-#	TODO make this work
 for pid in ${pids[*]}
 do
     wait $pid
