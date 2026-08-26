@@ -3,10 +3,9 @@ set -uo pipefail
 
 # Help command
 if [[ "${1-default}" == *"-h"* ]]; then
-	echo "Trivial parallelization of cprdir."
-	echo "Opens up cprdir in all subdirectories."
-	echo
 	echo "Usage: cprdirdir [flags] [quality]"
+	echo "Trivial parallelization of cprdir. Opens up cprdir in all subdirectories."
+	echo
 	echo "Flags:"
 	echo "	h - Displays help message"
 	echo "	y - Force yes"

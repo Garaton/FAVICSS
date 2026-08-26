@@ -1,4 +1,6 @@
 #!/bin/bash
+set -eo pipefail
+IFS=$'\n\t'
 
 # two parameters, directory 1 and 2, they share the exact same file structure
 # $2 has the same name as $1 but has a leading _
@@ -6,12 +8,16 @@
 
 
 # Doing cancellation checks
-if [[ -z $2 ]] then
-	echo "Usage:	cmpdir dir1 dir2"
+if [[ -z $2 ]]; then
+	echo "Usage:	cmpdir <dir1> <dir2>"
+	echo "Compares dir1 and dir2 which have the exact same file structure. Moves over"
+	echo "smaller matching files from dir2 into dir1."
+	echo "dir2 is the same name as dir1 but with a leading underscore."
+	echo "	ex: dir1=bob dir2=_bob"
 	exit
 fi
 
-if ! [[ "$2" == "_$1" ]] then
+if [[ "$2" != "_$1" ]]; then
 	echo "dir2 must be dir1 plus an underscore."
 	echo "IE: 	dir1=$1	dir2=_$1"
 	exit
@@ -19,19 +25,19 @@ fi
 
 read -p "This will destroy $2 are you sure (y/n): " input
 
-if ! [[ "$input" == "y" ]] then
+if [[ "$input" != "y" ]]; then
 	exit
 fi
 
 
 # Moving over smaller files
-find "$1/"** -type f | while read file
+find "$1/"** -type f | while read f1
 do
-	f1="$(find $1 | grep "$file")"
-	f2="$(find $2 | grep "$file")"
+	f2="_$f1"
 
 	# If $f2 is smaller move it to $f1
-	if [[ $(stat -c%s "$f2") < $(stat -c%s "$f1") ]] then
+	if (( $(stat -c%s "$f2") < $(stat -c%s "$f1") )); then
+		echo "Compressed: $f1	$(stat -c%s "$f1") -> $(stat -c%s "$f2")" # Print the file
 		mv "$f2" "$f1"
 	fi
 done

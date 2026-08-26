@@ -5,6 +5,8 @@ IFS=$'\n\t'
 # Usage
 if [[ "$1" == *"-"*"h"* ]]; then
 	echo "Usage: cprdir [flags] [quality #]"
+	echo "File compression utility which uses FFMPEG to compress lots of files for you."
+	echo
 	echo "Flags:"
 	echo "	h - Help"
 	echo "	y - Force yes"
@@ -118,47 +120,44 @@ do
 		# Current Winner: webp, qual 25, comp 2: 21.3 -> 12.5 MB
 		#	0 quality does COMPRESS, but you don't notice 25 quality
 		if $dont_core_max; then
-			ffmpeg -i "$f" -c:v libwebp -compression_level 2 -quality "$qual" "$tempdir/1.webp" -loglevel error -y < /dev/null
+			ffmpeg -i "$f" -c:v libwebp -compression_level 2 -quality "$qual" "$tempdir/p1.webp" -loglevel error -y < /dev/null
 		else
-			ffmpeg -i "$f" -c:v libwebp -compression_level 2 -quality "$qual" "$tempdir/1.webp" -loglevel error -y < /dev/null & PID1=$!
-			ffmpeg -i "$f" -c:v libwebp -compression_level 4 -quality "$qual" "$tempdir/2.webp" -loglevel error -y < /dev/null & PID2=$!
-			ffmpeg -i "$f" -c:v libwebp -compression_level 2 -quality 50 "$tempdir/3.webp" -loglevel error -y < /dev/null & PID3=$!
-			ffmpeg -i "$f" -c:v libwebp -compression_level 2 -quality 80 "$tempdir/4.webp" -loglevel error -y < /dev/null & PID4=$!
+			ffmpeg -i "$f" -c:v libwebp -compression_level 2 -quality "$qual" "$tempdir/p1.webp" -loglevel error -y < /dev/null & PID1=$!
+			ffmpeg -i "$f" -c:v libwebp -compression_level 4 -quality "$qual" "$tempdir/p2.webp" -loglevel error -y < /dev/null & PID2=$!
+			ffmpeg -i "$f" -c:v libwebp -compression_level 2 -quality 50 "$tempdir/p3.webp" -loglevel error -y < /dev/null & PID3=$!
+			ffmpeg -i "$f" -c:v libwebp -compression_level 2 -quality 80 "$tempdir/p4.webp" -loglevel error -y < /dev/null & PID4=$!
 			wait "$PID1"
 			wait "$PID2"
 			wait "$PID3"
 			wait "$PID4"
 		fi
 		cmpr=1
-		ext=".webp"
 
 	# Audio Case
 	elif [[ "$mime_type" == "audio/"* ]]; then
-		# Current winner: ogg, -c:a libvorbis -ab 32k -ar 22050 -b:a 96k: 310.2 -> 93.8 MiB
+		# Current winner: opus, -c:a libvorbis -ab 32k -b:a 64k -vn
+		# libopus at lower bitrate sounds about the same as libvorbis, allows higher compression
 		if $dont_core_max; then
-			ffmpeg -i "$f" -c:a libvorbis -ab 32k -ar 22050 -b:a 96k "$tempdir/1.ogg" -loglevel error -y < /dev/null
+			ffmpeg -i "$f" -c:a libopus -ab 32k -b:a 64k "$tempdir/a1.opus" -loglevel error -y < /dev/null
 		else
-			ffmpeg -i "$f" -c:a libvorbis -ab 32k -ar 22050 -b:a 96k "$tempdir/1.ogg" -loglevel error -y < /dev/null & PID1=$!
-			ffmpeg -i "$f" -b:a 96k "$tempdir/2.ogg" -loglevel error -y < /dev/null & PID2=$!
+			ffmpeg -i "$f" -c:a libopus -ab 32k -b:a 64k "$tempdir/a1.opus" -loglevel error -y < /dev/null & PID1=$!
+			ffmpeg -i "$f" -c:a libvorbis -ab 32k -ar 22050 -b:a 96k "$tempdir/a2.ogg" -loglevel error -y < /dev/null & PID2=$!
 			wait "$PID1"
 			wait "$PID2"
 		fi
 		cmpr=1
-		ext=".ogg"
 	
 	# Video Case
 	elif $do_vid && [[ "$mime_type" == "video/"* ]]; then
 		echo "Compressing Video: $f"
-		ffmpeg -i "$f" -c:v libvpx -b:v 1M -crf 30 -c:a libopus "$tempdir/1.webm" -loglevel error -y < /dev/null
+		ffmpeg -i "$f" -c:v libvpx -b:v 1M -crf 30 -c:a libopus "$tempdir/v1.webm" -loglevel error -y < /dev/null
 		cmpr=1
-		ext=".webm"
 
 	# Font Case
 	# Scrict because fontconv is scrict
 	elif $do_font && [[ "$f" == *".ttf" || "$f" == *".otf" ]]; then
-		fontconv "$f" "$tempdir/1.otf"
+		fontconv "$f" "$tempdir/f1.otf"
 		cmpr=1
-		ext=".otf"
 	fi
 
 	# If we compressed and it's smaller replace
@@ -166,7 +165,7 @@ do
 		# Get the smallest file
 		smallFile=$(minTmp)
 		if [[ "$smallFile" != "$f" ]]; then
-			echo "Compressed: $f	$(stat -c%s "$f") -> $(stat -c%s "$smallFile")" # Print the file
+			echo "Compressed: $f	$(stat -c%s "$f") -> $(stat -c%s "$smallFile")	($(basename "$smallFile"))" # Print the file
 			mv "$smallFile" "$f"
 		fi
 		# Cleanup temp directory
