@@ -135,12 +135,12 @@ do
 
 	# Audio Case
 	elif [[ "$mime_type" == "audio/"* ]]; then
-		# Current winner: opus, -c:a libvorbis -ab 32k -b:a 64k -vn
+		# Current winner: ogg, -c:a libvorbis -ab 32k -b:a 64k -vn
 		# libopus at lower bitrate sounds about the same as libvorbis, allows higher compression
 		if $dont_core_max; then
-			ffmpeg -i "$f" -c:a libopus -ab 32k -b:a 64k "$tempdir/a1.opus" -loglevel error -y < /dev/null
+			ffmpeg -i "$f" -c:a libopus -ab 32k -b:a 64k "$tempdir/a1.ogg" -loglevel error -y < /dev/null
 		else
-			ffmpeg -i "$f" -c:a libopus -ab 32k -b:a 64k "$tempdir/a1.opus" -loglevel error -y < /dev/null & PID1=$!
+			ffmpeg -i "$f" -c:a libopus -ab 32k -b:a 64k "$tempdir/a1.ogg" -loglevel error -y < /dev/null & PID1=$!
 			ffmpeg -i "$f" -c:a libvorbis -ab 32k -ar 22050 -b:a 96k "$tempdir/a2.ogg" -loglevel error -y < /dev/null & PID2=$!
 			wait "$PID1"
 			wait "$PID2"
