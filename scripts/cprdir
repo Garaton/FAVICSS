@@ -120,16 +120,20 @@ do
 		# Current Winner: webp, qual 25, comp 2: 21.3 -> 12.5 MB
 		#	0 quality does COMPRESS, but you don't notice 25 quality
 		if $dont_core_max; then
-			ffmpeg -i "$f" -c:v libwebp -compression_level 2 -quality "$qual" "$tempdir/p1.webp" -loglevel error -y < /dev/null
+			ffmpeg -i "$f" -c:v libwebp -compression_level 4 -quality "$qual" "$tempdir/p1.webp" -loglevel error -y < /dev/null
 		else
-			ffmpeg -i "$f" -c:v libwebp -compression_level 2 -quality "$qual" "$tempdir/p1.webp" -loglevel error -y < /dev/null & PID1=$!
-			ffmpeg -i "$f" -c:v libwebp -compression_level 4 -quality "$qual" "$tempdir/p2.webp" -loglevel error -y < /dev/null & PID2=$!
+			ffmpeg -i "$f" -c:v libwebp -compression_level 4 -quality "$qual" "$tempdir/p1.webp" -loglevel error -y < /dev/null & PID1=$!
+			ffmpeg -i "$f" -c:v libwebp -compression_level 2 -quality "$qual" "$tempdir/p2.webp" -loglevel error -y < /dev/null & PID2=$!
 			ffmpeg -i "$f" -c:v libwebp -compression_level 2 -quality 50 "$tempdir/p3.webp" -loglevel error -y < /dev/null & PID3=$!
 			ffmpeg -i "$f" -c:v libwebp -compression_level 2 -quality 80 "$tempdir/p4.webp" -loglevel error -y < /dev/null & PID4=$!
+			ffmpeg -i "$f" -c:v libjxl -distance 5 -effort 7 "$tempdir/p5.jxl" -loglevel error -y < /dev/null & PID5=$!
+			ffmpeg -i "$f" -c:v libjxl -distance 5 -effort 3 "$tempdir/p6.jxl" -loglevel error -y < /dev/null & PID6=$!
 			wait "$PID1"
 			wait "$PID2"
 			wait "$PID3"
 			wait "$PID4"
+			wait "$PID5"
+			wait "$PID6"
 		fi
 		cmpr=1
 
@@ -150,7 +154,14 @@ do
 	# Video Case
 	elif $do_vid && [[ "$mime_type" == "video/"* ]]; then
 		echo "Compressing Video: $f"
-		ffmpeg -i "$f" -c:v libvpx -b:v 1M -crf 30 -c:a libopus "$tempdir/v1.webm" -loglevel error -y < /dev/null
+		if $dont_core_max; then
+			ffmpeg -i "$f" -c:v libvpx -b:v 1M -crf 45 -c:a libopus "$tempdir/v1.webm" -loglevel error -y < /dev/null
+		else
+			ffmpeg -i "$f" -c:v libvpx -b:v 1M -crf 45 -c:a libopus "$tempdir/v1.webm" -loglevel error -y < /dev/null & PID1=$!
+			ffmpeg -i "$f" -c:v libaom-av1 -b:v 1M -crf 45 -c:a libopus "$tempdir/v2.webm" -loglevel error -y < /dev/null & PID2=$!
+			wait "$PID1"
+			wait "$PID2"
+		fi
 		cmpr=1
 
 	# Font Case
