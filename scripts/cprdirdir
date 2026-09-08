@@ -2,7 +2,7 @@
 set -uo pipefail
 
 # Help command
-if [[ "${1-default}" == *"-h"* ]]; then
+usage() {
 	echo "Usage: cprdirdir [flags] [quality]"
 	echo "Trivial parallelization of cprdir. Opens up cprdir in all subdirectories."
 	echo
@@ -15,11 +15,48 @@ if [[ "${1-default}" == *"-h"* ]]; then
 	echo "	q - Specified quality"
 	echo "	b - Do it in a backup"
 	exit 1
-fi
+}
+
+# Argument parsing
+yes=false
+backup=false
+do_vid=false
+do_font=false
+flags="-y"
+while getopts ":hybvfcq:" opt; do
+	case $opt in
+		h) usage;;
+		y) yes=true;;
+		b) backup=true;;
+		v) flags=$flags" -v";;
+		f)
+			if [[ -z "$(command -v fontconv)" ]]; then
+				echo "Error: Dependency \"fontconv\" not found if you wish to compress fonts please refer to README.md.">&2
+				usage
+			else
+				flags=$flags" -f"
+			fi
+			;;
+		c) flags=$flags" -c";;
+		q)
+			if [[ $OPTARG =~ ^[0-9]+$ ]]; then
+				flags=$flags" -q $OPTARG"
+			else
+				echo "Error: Quality value is not a number, \"$OPTARG\".">&2
+				usage
+			fi
+			;;
+		\?) echo "Error: Unknown flag \"$OPTARG\"">&2; usage;;
+		:)
+			echo "Error: Quality flag set, but quality value not specified.">&2
+			usage
+			;;
+	esac
+done
 
 # MAKING SURE
-if [[ "${1-default}" != *"-"*"y"* && "${1-default}" != *"-"*"b"* ]]; then
-	if [[ "${1-default}" != *"-"*"v"* ]]; then
+if ! $yes && ! $backup; then
+	if ! do_vid; then
 		echo "This will change images, and audio, found within:"
 	else
 		echo "This will change images, audio, and videos, found within:"
@@ -43,25 +80,10 @@ killProcs() {
 
 # Checking for backup
 dir_name="${PWD##*/}-compressed"
-if [[ "$1" == "-"*"b"* ]]; then
+if $backup; then
 	# Copy this directory into dir_name, we override already existing compressed dirs
 	cp -r . "../$dir_name"
 	cd "../$dir_name"
-fi
-
-# Managing flags
-flags="-y"
-if [[ "${1-default}" == *"-"*"v"* ]]; then
-	flags=$flags"v"
-fi
-if [[ "${1-default}" == *"-"*"f"* ]]; then
-	flags=$flags"f"
-fi
-if [[ "${1-default}" == *"-"*"c"* ]]; then
-	flags=$flags"c"
-fi
-if [[ "${1-default}" == *"-"*"q"* ]]; then
-	flags=$flags"q "$2 # If no 2 it should error
 fi
 
 # Starting cprs
