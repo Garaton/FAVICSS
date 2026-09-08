@@ -56,21 +56,21 @@ trap "rm -rf "$tempdir"" EXIT
 
 # Setting up functions
 # Find smallest value in tmp, or $f
-minTmp() {
+min_tmp() {
 	local min=$(stat -c%s "$f")
-	local minFile=$f
+	local min_file=$f
 	local size=0
-	for tempFile in "$tempdir/"*
+	for temp_file in "$tempdir/"*
 	do
-		size=$(stat -c%s "$tempFile")
+		size=$(stat -c%s "$temp_file")
 		if (( $size < $min )) && ! (( $size == 0 )) then
 			min=$size
-			minFile=$tempFile
+			min_file=$temp_file
 		fi
 	done
 
 	# Returning minimum
-	echo "$minFile"
+	echo "$min_file"
 }
 
 
@@ -102,6 +102,11 @@ if [[ "$1" == "-"*"f"* ]]; then
 	fi
 fi
 
+# Checking if we have an NVIDIA GPU for fast video compression
+nvidia_gpu=false
+if [[ ! -z "$(lspci | grep -i nvidia)" ]]; then
+	nvidia_gpu=true
+fi
 
 
 # Starting script
@@ -117,29 +122,21 @@ do
 	# Compressing
 	# Image Case
 	if [[ "$mime_type" == "image/"* ]]; then
-		# Current Winner: webp, qual 25, comp 2: 21.3 -> 12.5 MB
+		# Current Winner: webp, qual 25, comp 4
 		#	0 quality does COMPRESS, but you don't notice 25 quality
 		if $dont_core_max; then
 			ffmpeg -i "$f" -c:v libwebp -compression_level 4 -quality "$qual" "$tempdir/p1.webp" -loglevel error -y < /dev/null
 		else
 			ffmpeg -i "$f" -c:v libwebp -compression_level 4 -quality "$qual" "$tempdir/p1.webp" -loglevel error -y < /dev/null & PID1=$!
-			ffmpeg -i "$f" -c:v libwebp -compression_level 2 -quality "$qual" "$tempdir/p2.webp" -loglevel error -y < /dev/null & PID2=$!
-			ffmpeg -i "$f" -c:v libwebp -compression_level 2 -quality 50 "$tempdir/p3.webp" -loglevel error -y < /dev/null & PID3=$!
-			ffmpeg -i "$f" -c:v libwebp -compression_level 2 -quality 80 "$tempdir/p4.webp" -loglevel error -y < /dev/null & PID4=$!
-			ffmpeg -i "$f" -c:v libjxl -distance 5 -effort 7 "$tempdir/p5.jxl" -loglevel error -y < /dev/null & PID5=$!
-			ffmpeg -i "$f" -c:v libjxl -distance 5 -effort 3 "$tempdir/p6.jxl" -loglevel error -y < /dev/null & PID6=$!
+			ffmpeg -i "$f" -c:v libjxl -distance 6 -effort 7 "$tempdir/p2.jxl" -loglevel error -y < /dev/null & PID2=$!
 			wait "$PID1"
 			wait "$PID2"
-			wait "$PID3"
-			wait "$PID4"
-			wait "$PID5"
-			wait "$PID6"
 		fi
 		cmpr=1
 
 	# Audio Case
 	elif [[ "$mime_type" == "audio/"* ]]; then
-		# Current winner: ogg, -c:a libvorbis -ab 32k -b:a 64k -vn
+		# Current winner: ogg, -c:a libopus -ab 32k -b:a 64k
 		# libopus at lower bitrate sounds about the same as libvorbis, allows higher compression
 		if $dont_core_max; then
 			ffmpeg -i "$f" -c:a libopus -ab 32k -b:a 64k "$tempdir/a1.ogg" -loglevel error -y < /dev/null
@@ -154,13 +151,10 @@ do
 	# Video Case
 	elif $do_vid && [[ "$mime_type" == "video/"* ]]; then
 		echo "Compressing Video: $f"
-		if $dont_core_max; then
-			ffmpeg -i "$f" -c:v libvpx -b:v 1M -crf 45 -c:a libopus "$tempdir/v1.webm" -loglevel error -y < /dev/null
+		if $nvidia_gpu; then
+			ffmpeg -i "$f" -c:v av1_nvenc -preset p6 -rc vbr -cq 45 -c:a libopus -ab 32k -b:a 64k "$tempdir/v1.webm" -loglevel error -y < /dev/null
 		else
-			ffmpeg -i "$f" -c:v libvpx -b:v 1M -crf 45 -c:a libopus "$tempdir/v1.webm" -loglevel error -y < /dev/null & PID1=$!
-			ffmpeg -i "$f" -c:v libaom-av1 -b:v 1M -crf 45 -c:a libopus "$tempdir/v2.webm" -loglevel error -y < /dev/null & PID2=$!
-			wait "$PID1"
-			wait "$PID2"
+			ffmpeg -i "$f" -c:v libvpx -b:v 1M -crf 45 -c:a libopus -ab 32k -b:a 64k "$tempdir/v1.webm" -loglevel error -y < /dev/null
 		fi
 		cmpr=1
 
@@ -174,10 +168,10 @@ do
 	# If we compressed and it's smaller replace
 	if [[ $cmpr == 1 ]] then
 		# Get the smallest file
-		smallFile=$(minTmp)
+		small_file=$(min_tmp)
 		if [[ "$smallFile" != "$f" ]]; then
-			echo "Compressed: $f	$(stat -c%s "$f") -> $(stat -c%s "$smallFile")	($(basename "$smallFile"))" # Print the file
-			mv "$smallFile" "$f"
+			echo "Compressed: $f	$(stat -c%s "$f") -> $(stat -c%s "$small_file")	($(basename "$small_file"))" # Print the file
+			mv "$small_file" "$f"
 		fi
 		# Cleanup temp directory
 		if [[ ! -z $(ls "$tempdir") ]]; then
