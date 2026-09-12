@@ -12,6 +12,7 @@ usage() {
 	echo "	v - Include video"
 	echo "	f - Include fonts"
 	echo "	c - Use more cores to compress (CPU hell)"
+	echo "	l - Compress lossless"
 	echo "	q - Specified quality"
 	echo "	b - Do it in a backup"
 	exit 1
@@ -38,6 +39,7 @@ while getopts ":hybvfcq:" opt; do
 			fi
 			;;
 		c) flags=$flags" -c";;
+		l) flags=$flags" -l";;
 		q)
 			if [[ $OPTARG =~ ^[0-9]+$ ]]; then
 				flags=$flags" -q $OPTARG"

@@ -14,8 +14,9 @@ usage() {
 	echo "	v - Include videos (videos take a while)"
 	echo "	f - Include fonts (requires fontconv)"
 	echo "	c - Uses more cores to try and compress files more"
+	echo "	l - For lossless"
 	echo "	q - Check for Quality # (must be last flag)"
-	echo "		Quality #: Used by ffmpeg for images"
+	echo "		Quality #: Used by ffmpeg for images (0 lowest, 100 highest)"
 	echo
 	echo "EX: cprdir -yvq 0"
 	exit 1
@@ -34,8 +35,10 @@ backup=false
 do_vid=false
 do_font=false
 dont_core_max=true
+lossless=0
+jxl_distance=6
 qual=25
-while getopts ":hybvfcq:" opt; do
+while getopts ":hybvfclq:" opt; do
 	case $opt in
 		h) usage;;
 		y) yes=true;;
@@ -50,6 +53,7 @@ while getopts ":hybvfcq:" opt; do
 			fi
 			;;
 		c) dont_core_max=false;;
+		l) lossless=1; jxl_distance=0;;
 		q)
 			if [[ $OPTARG =~ ^[0-9]+$ ]]; then
 				qual=$OPTARG
@@ -122,6 +126,7 @@ fi
 
 # Starting script
 mkdir "$tempdir"
+SECONDS=0
 
 find . -type f | while read f
 do
@@ -135,11 +140,14 @@ do
 	if [[ "$mime_type" == "image/"* ]]; then
 		# Current Winner: webp, qual 25, comp 4
 		#	0 quality does COMPRESS, but you don't notice 25 quality
+
+		# Normal Run
 		if $dont_core_max; then
-			ffmpeg -i "$f" -c:v libwebp -compression_level 4 -quality "$qual" "$tempdir/p1.webp" -loglevel error -y < /dev/null
+			ffmpeg -i "$f" -c:v libwebp -lossless $lossless -compression_level 4 -quality "$qual" "$tempdir/p1.webp" -loglevel error -y < /dev/null
+		# Trying Multiple Options Run
 		else
-			ffmpeg -i "$f" -c:v libwebp -compression_level 4 -quality "$qual" "$tempdir/p1.webp" -loglevel error -y < /dev/null & PID1=$!
-			ffmpeg -i "$f" -c:v libjxl -distance 6 -effort 7 "$tempdir/p2.jxl" -loglevel error -y < /dev/null & PID2=$!
+			ffmpeg -i "$f" -c:v libwebp -lossless $lossless -compression_level 4 -quality "$qual" "$tempdir/p1.webp" -loglevel error -y < /dev/null & PID1=$!
+			ffmpeg -i "$f" -c:v libjxl -distance $jxl_distance -effort 7 "$tempdir/p2.jxl" -loglevel error -y < /dev/null & PID2=$!
 			wait "$PID1"
 			wait "$PID2"
 		fi
@@ -149,8 +157,14 @@ do
 	elif [[ "$mime_type" == "audio/"* ]]; then
 		# Current winner: ogg, -c:a libopus -ab 32k -b:a 64k
 		# libopus at lower bitrate sounds about the same as libvorbis, allows higher compression
-		if $dont_core_max; then
+
+		# Lossless Run
+		if (( $lossless == 1 )); then
+			ffmpeg -i "$f" -c:a flac -compression_level 8 "$tempdir/a1.flac" -loglevel error -y < /dev/null
+		# Normal Run
+		elif $dont_core_max; then
 			ffmpeg -i "$f" -c:a libopus -ab 32k -b:a 64k "$tempdir/a1.ogg" -loglevel error -y < /dev/null
+		# Trying multiple options Run
 		else
 			ffmpeg -i "$f" -c:a libopus -ab 32k -b:a 64k "$tempdir/a1.ogg" -loglevel error -y < /dev/null & PID1=$!
 			ffmpeg -i "$f" -c:a libvorbis -ab 32k -ar 22050 -b:a 96k "$tempdir/a2.ogg" -loglevel error -y < /dev/null & PID2=$!
@@ -162,15 +176,20 @@ do
 	# Video Case
 	elif $do_vid && [[ "$mime_type" == "video/"* ]]; then
 		echo "Compressing Video: $f"
-		if $nvidia_gpu; then
-			ffmpeg -i "$f" -c:v av1_nvenc -preset p6 -rc vbr -cq 45 -c:a libopus -ab 32k -b:a 64k "$tempdir/v1.webm" -loglevel error -y < /dev/null
+		# Lossless Run
+		if (( $lossless == 1 )); then
+			ffmpeg -i "$f" -map 0 -c:v ffv1 -level 3 -g 1 -slicecrc 1 -slices 24 -coder 0 -context 0 -c:a copy -c:s copy "$tempdir/v1.mkv" -loglevel error -y < /dev/null
+		# GPU Accelerated Run
+		elif $nvidia_gpu; then
+			ffmpeg -i "$f" -c:v av1_nvenc -preset p6 -tune hq -rc vbr -cq 57 -b:v 0 -multipass fullres -c:a libopus -ab 32k -b:a 64k "$tempdir/v1.webm" -loglevel error -y < /dev/null
+		# Normal Run
 		else
-			ffmpeg -i "$f" -c:v libvpx -b:v 1M -crf 45 -c:a libopus -ab 32k -b:a 64k "$tempdir/v1.webm" -loglevel error -y < /dev/null
+			ffmpeg -i "$f" -c:v libsvtav1 -crf 60 -preset 6 -svtav1-params lp=4 -c:a libopus -ab 32k -b:a 64k "$tempdir/v1.webm" -loglevel error -y < /dev/null
 		fi
 		cmpr=1
 
 	# Font Case
-	# Scrict because fontconv is scrict
+	# Scrict because fontconv is scrict, otf is already lossless
 	elif $do_font && [[ "$f" == *".ttf" || "$f" == *".otf" ]]; then
 		fontconv "$f" "$tempdir/f1.otf"
 		cmpr=1
@@ -190,4 +209,6 @@ do
 		fi
 	fi
 done
+
+echo "$PWD took $SECONDS."
 

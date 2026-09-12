@@ -58,6 +58,7 @@ Flags:
 - b: Compress in a different directory (copies the entire directory over)
 - v: Include videos (videos take a while)
 - f: Include fonts (requires fontconv)
+- l: Compresses losslessly
 - q: Manual quality # for images
   - Quality #: Used by ffmpeg for images
 - c: Tries multiple ffmpeg setups to see which one compresses the file best
