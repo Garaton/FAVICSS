@@ -1,4 +1,6 @@
 #!/bin/bash
+
+# No e since underlying cprdir can fail, and we dont want the main controlling cprdirdir to fail due to that
 set -uo pipefail
 
 # Help command
@@ -10,10 +12,11 @@ usage() {
 	echo "	h - Displays help message"
 	echo "	y - Force yes"
 	echo "	v - Include video"
-	echo "	f - Include fonts"
+	echo "	g - Use NVIDIA GPU for video compression"
+	echo "	f - Include fonts (CURRENTLY DEACTIVATED LOOKING INTO NEW SOLUTION"
 	echo "	c - Use more cores to compress (CPU hell)"
 	echo "	l - Compress lossless"
-	echo "	q - Specified quality"
+    echo "	q - Specified quality (0 - 100, only for webp)"
 	echo "	b - Do it in a backup"
 	exit 1
 }
@@ -22,15 +25,17 @@ usage() {
 yes=false
 backup=false
 do_vid=false
-do_font=false
 flags="-y"
-while getopts ":hybvfcq:" opt; do
+while getopts ":hybvfglcq:" opt; do
 	case $opt in
 		h) usage;;
 		y) yes=true;;
 		b) backup=true;;
 		v) flags=$flags" -v";;
+		g) flags=$flags" -g";;
 		f)
+			echo "Error: Font compression is currently deactivated until better solution is found.">&2
+			usage
 			if [[ -z "$(command -v fontconv)" ]]; then
 				echo "Error: Dependency \"fontconv\" not found if you wish to compress fonts please refer to README.md.">&2
 				usage
@@ -66,7 +71,8 @@ if ! $yes && ! $backup; then
 	echo "$(ls -d */)"
 	read -p "Are you sure you wish to proceed (y/n): " input
 	if [[ "$input" != "y" ]]; then
-		exit 0
+		echo "Did not get a \"y\", exiting."
+		usage
 	fi
 fi
 
@@ -77,14 +83,13 @@ killProcs() {
 	do
 		kill $pid
 	done
-	return
 }
 
 # Checking for backup
-dir_name="${PWD##*/}-compressed"
 if $backup; then
 	# Copy this directory into dir_name, we override already existing compressed dirs
-	cp -r . "../$dir_name"
+	dir_name="${PWD##*/}-compressed"
+	cp -rn . "../$dir_name"
 	cd "../$dir_name"
 fi
 
@@ -97,21 +102,12 @@ goOn=true
 trap "killProcs" SIGTERM
 while read dir
 do
-	# This will prompt us for each directory
-	if [[ "${1-default}" == *"-"*"n"* ]]; then
-		read -p "Do you want to compress $dir (y/n): " yesNo
-		if ! [[ $yesNo == "y" ]]; then
-			goOn=false
-		fi
-	fi
-	# Checking if we're doing this directory
-	if [[ $goOn == true ]]; then
-		cd "${dir///}" # remove all instances of /
-		cprdir $flags & pid=$!
-		pids[${i}]=$pid
-		i=$((i + 1))
-		cd .. # Leave
-	fi
+	# Entering directory, and running cprdir
+	cd "${dir///}" # remove all instances of /
+	cprdir $flags & pid=$!
+	pids[${i}]=$pid
+	i=$((i + 1))
+	cd .. # Leave
 done < <(ls -1 -d */ )
 
 

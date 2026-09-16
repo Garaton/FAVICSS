@@ -12,7 +12,8 @@ usage() {
 	echo "	y - Force yes"
 	echo "	b - Compress in a different directory (copies the entire directory over)"
 	echo "	v - Include videos (videos take a while)"
-	echo "	f - Include fonts (requires fontconv)"
+	echo "	g - Use NVIDIA GPU acceleration (video only) (lower quality, ~4-8x speedup on videos)"
+	echo "	f - Include fonts (CURRENTLY REMOVED SINCE IT DOESN'T WORK ON LARGE FONTS)"
 	echo "	c - Uses more cores to try and compress files more"
 	echo "	l - For lossless"
 	echo "	q - Check for Quality # (must be last flag)"
@@ -25,7 +26,7 @@ usage() {
 # Cancellation checks
 # Do we have ffmpeg
 if [[ -z "$(command -v ffmpeg)" ]]; then
-	echo "Error: Missing dependency \"ffmpeg\"."
+	echo "Error: Missing dependency \"ffmpeg\".">&2
 	usage
 fi
 
@@ -36,24 +37,28 @@ do_vid=false
 do_font=false
 dont_core_max=true
 lossless=0
-jxl_distance=6
-qual=25
-while getopts ":hybvfclq:" opt; do
+jxl_distance=7
+use_gpu=false
+qual=35
+while getopts ":hybvgfclq:" opt; do
 	case $opt in
 		h) usage;;
 		y) yes=true;;
 		b) backup=true;;
 		v) do_vid=true;;
+		g) use_gpu=true;;
+		c) dont_core_max=false;;
+		l) lossless=1; jxl_distance=0;;
 		f)
-			if [[ -z "$(command -v fontconv)" ]]; then
-				echo "Error: Dependency \"fontconv\" not found if you wish to compress fonts please refer to README.md.">&2
+			echo "Error: Font compression is disabled until less buggy tool is found.">&2
+			usage
+			if [[ -z "$(command -v fontforge)" ]]; then
+				echo "Error: Dependency \"fontforge\" not found if you wish to compress fonts please refer to README.md.">&2
 				usage
 			else
 				do_font=true
 			fi
 			;;
-		c) dont_core_max=false;;
-		l) lossless=1; jxl_distance=0;;
 		q)
 			if [[ $OPTARG =~ ^[0-9]+$ ]]; then
 				qual=$OPTARG
@@ -62,6 +67,7 @@ while getopts ":hybvfclq:" opt; do
 				usage
 			fi
 			;;
+
 		\?) echo "Error: Unknown flag \"$OPTARG\"">&2; usage;;
 		:)
 			echo "Error: Quality flag set, but quality value not specified.">&2
@@ -74,7 +80,7 @@ done
 # Ask the user if they really want to do this
 if ! $yes && ! $backup; then
 	echo "This will change images, audio, and maybe videos, found within:"
-	echo "	$(pwd)"
+	echo "	$PWD"
 	read -p "Are you sure you wish to proceed (y/n): " input
 
 	if [[ "$input" != "y" ]]; then
@@ -85,50 +91,32 @@ fi
 
 # Setting up temp directory name
 tempdir="temp-compressing-$RANDOM"
-dir_name="${PWD##*/}-compressed"
 
 if $backup; then
 	# Copy this directory into dir_name, we override already existing compressed dirs
-	cp -r . "../$dir_name"
+	dir_name="${PWD##*/}-compressed"
+	cp -rn . "../$dir_name"
 	cd "../$dir_name"
 fi
 
-# Cleanup
-trap "rm -rf "$tempdir"" EXIT
-
-
-# Setting up functions
-# Find smallest value in tmp, or $f
-min_tmp() {
-	local min=$(stat -c%s "$f")
-	local min_file=$f
-	local size=0
-	for temp_file in "$tempdir/"*
-	do
-		size=$(stat -c%s "$temp_file")
-		if (( $size < $min )) && ! (( $size == 0 )) then
-			min=$size
-			min_file=$temp_file
-		fi
-	done
-
-	# Returning minimum
-	echo "$min_file"
-}
 
 
 # Checking if we have an NVIDIA GPU for fast video compression
+# lspci is garunteed if we have NVIDIA, but there's not access everywhere, and you can have nvidia-smi but not have an nvidia GPU (it would be stupid which is why we are doing this approach)
 nvidia_gpu=false
-if [[ ! -z "$(lspci | grep -i nvidia)" ]]; then
+if $use_gpu && [[ ! -z "$(command -v nvidia-smi)" ]]; then
 	nvidia_gpu=true
 fi
 
 
-# Starting script
+# Making the temp directory for our compressed videos
 mkdir "$tempdir"
+trap "rm -rf "$tempdir"" EXIT # Cleanup
+
+# Starting script
 SECONDS=0
 
-find . -type f | while read f
+for f in $(find . -type f)
 do
 	# Tracking variables
 	cmpr=0 # Did we compress
@@ -138,16 +126,16 @@ do
 	# Compressing
 	# Image Case
 	if [[ "$mime_type" == "image/"* ]]; then
-		# Current Winner: webp, qual 25, comp 4
-		#	0 quality does COMPRESS, but you don't notice 25 quality
-
+		# Lossless Run
+		if $dont_core_max && (( $lossless == 1 )); then
+			ffmpeg -i "$f" -c:v libjxl -distance 0 -effort 6 "$tempdir/p1.jxl" -loglevel error -y
 		# Normal Run
-		if $dont_core_max; then
-			ffmpeg -i "$f" -c:v libwebp -lossless $lossless -compression_level 4 -quality "$qual" "$tempdir/p1.webp" -loglevel error -y < /dev/null
+		elif $dont_core_max; then
+			ffmpeg -i "$f" -c:v libwebp -compression_level 4 -quality "$qual" "$tempdir/p1.webp" -loglevel error -y
 		# Trying Multiple Options Run
 		else
-			ffmpeg -i "$f" -c:v libwebp -lossless $lossless -compression_level 4 -quality "$qual" "$tempdir/p1.webp" -loglevel error -y < /dev/null & PID1=$!
-			ffmpeg -i "$f" -c:v libjxl -distance $jxl_distance -effort 7 "$tempdir/p2.jxl" -loglevel error -y < /dev/null & PID2=$!
+			ffmpeg -i "$f" -c:v libwebp -lossless $lossless -compression_level 4 -quality "$qual" "$tempdir/p1.webp" -loglevel error -y & PID1=$!
+			ffmpeg -i "$f" -c:v libjxl -distance $jxl_distance -effort 6 "$tempdir/p2.jxl" -loglevel error -y & PID2=$!
 			wait "$PID1"
 			wait "$PID2"
 		fi
@@ -157,17 +145,17 @@ do
 	elif [[ "$mime_type" == "audio/"* ]]; then
 		# Current winner: ogg, -c:a libopus -ab 32k -b:a 64k
 		# libopus at lower bitrate sounds about the same as libvorbis, allows higher compression
-
+		echo "$f"
 		# Lossless Run
 		if (( $lossless == 1 )); then
-			ffmpeg -i "$f" -c:a flac -compression_level 8 "$tempdir/a1.flac" -loglevel error -y < /dev/null
+			ffmpeg -i "$f" -c:a flac -compression_level 8 "$tempdir/a1.flac" -loglevel error -y
 		# Normal Run
 		elif $dont_core_max; then
-			ffmpeg -i "$f" -c:a libopus -ab 32k -b:a 64k "$tempdir/a1.ogg" -loglevel error -y < /dev/null
+			ffmpeg -i "$f" -c:a libopus -ab 32k -b:a 64k "$tempdir/a1.ogg" -loglevel error -y
 		# Trying multiple options Run
 		else
-			ffmpeg -i "$f" -c:a libopus -ab 32k -b:a 64k "$tempdir/a1.ogg" -loglevel error -y < /dev/null & PID1=$!
-			ffmpeg -i "$f" -c:a libvorbis -ab 32k -ar 22050 -b:a 96k "$tempdir/a2.ogg" -loglevel error -y < /dev/null & PID2=$!
+			ffmpeg -i "$f" -c:a libopus -ab 32k -b:a 64k "$tempdir/a1.ogg" -loglevel error -y & PID1=$!
+			ffmpeg -i "$f" -c:a libvorbis -ab 32k -b:a 96k "$tempdir/a2.ogg" -loglevel error -y & PID2=$!
 			wait "$PID1"
 			wait "$PID2"
 		fi
@@ -178,37 +166,39 @@ do
 		echo "Compressing Video: $f"
 		# Lossless Run
 		if (( $lossless == 1 )); then
-			ffmpeg -i "$f" -map 0 -c:v ffv1 -level 3 -g 1 -slicecrc 1 -slices 24 -coder 0 -context 0 -c:a copy -c:s copy "$tempdir/v1.mkv" -loglevel error -y < /dev/null
+			ffmpeg -i "$f" -map 0 -c:v ffv1 -level 3 -g 1 -slicecrc 1 -slices 24 -coder 0 -context 0 -c:a flac -c:s copy "$tempdir/v1.mkv" -loglevel error -y
 		# GPU Accelerated Run
 		elif $nvidia_gpu; then
-			ffmpeg -i "$f" -c:v av1_nvenc -preset p6 -tune hq -rc vbr -cq 57 -b:v 0 -multipass fullres -c:a libopus -ab 32k -b:a 64k "$tempdir/v1.webm" -loglevel error -y < /dev/null
+			ffmpeg -i "$f" -c:v av1_nvenc -preset p6 -tune hq -rc vbr -cq 50 -b:v 0 -multipass fullres -c:a libopus -ab 32k -b:a 64k "$tempdir/v1.mkv" -loglevel error -y
 		# Normal Run
 		else
-			ffmpeg -i "$f" -c:v libsvtav1 -crf 60 -preset 6 -svtav1-params lp=4 -c:a libopus -ab 32k -b:a 64k "$tempdir/v1.webm" -loglevel error -y < /dev/null
+			ffmpeg -i "$f" -c:v libsvtav1 -crf 50 -preset 6 -svtav1-params lp=4 -c:a libopus -ab 32k -b:a 64k "$tempdir/v1.mkv" -loglevel error -y 2> /dev/null
 		fi
 		cmpr=1
 
 	# Font Case
 	# Scrict because fontconv is scrict, otf is already lossless
 	elif $do_font && [[ "$f" == *".ttf" || "$f" == *".otf" ]]; then
-		fontconv "$f" "$tempdir/f1.otf"
-		cmpr=1
+		# fontconv "$f" "$tempdir/f1.otf"
+		# cmpr=1
+		echo "Error: Somehow got to disabled font compression section.">&2
+		exit 1
 	fi
 
 	# If we compressed and it's smaller replace
 	if [[ $cmpr == 1 ]] then
 		# Get the smallest file
-		small_file=$(min_tmp)
-		if [[ "$small_file" != "$f" ]]; then
-			echo "Compressed: $f	$(stat -c%s "$f") -> $(stat -c%s "$small_file")	($(basename "$small_file"))" # Print the file
-			mv "$small_file" "$f"
+		small_file=$(ls -Sr "$tempdir" | head -1)
+		small_size=$(stat -c%s "$tempdir/$small_file")
+		file_size=$(stat -c%s "$f")
+		if (( small_size < file_size )); then
+			echo "Compressed: $f	$file_size -> $small_size	($small_file)" # Print the file
+			mv "$tempdir/$small_file" "$f"
 		fi
 		# Cleanup temp directory
-		if [[ ! -z $(ls "$tempdir") ]]; then
-			rm "$tempdir/"*
-		fi
+		rm -f "$tempdir/"*
 	fi
 done
 
-echo "$PWD took $SECONDS."
+echo "$PWD took $SECONDS seconds."
 
