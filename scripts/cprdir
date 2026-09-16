@@ -145,8 +145,8 @@ do
 	elif [[ "$mime_type" == "audio/"* ]]; then
 		# Current winner: ogg, -c:a libopus -ab 32k -b:a 64k
 		# libopus at lower bitrate sounds about the same as libvorbis, allows higher compression
-		echo "$f"
-		# Lossless Run
+
+        # Lossless Run
 		if (( $lossless == 1 )); then
 			ffmpeg -i "$f" -c:a flac -compression_level 8 "$tempdir/a1.flac" -loglevel error -y
 		# Normal Run
