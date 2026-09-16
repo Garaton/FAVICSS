@@ -30,7 +30,6 @@ to avoid breaking things that use the files by their name.
 ## Dependencies
 
 - [ffmpeg](https://ffmpeg.org/download.html)
-- [fontconv](https://github.com/marmooo/fontconv)
 
 ## Contents
 
@@ -57,7 +56,9 @@ Flags:
 - y: Ignores prompts and automatically says yes
 - b: Compress in a different directory (copies the entire directory over)
 - v: Include videos (videos take a while)
-- f: Include fonts (requires fontconv)
+- g: Uses NVIDIA GPU for videos (~4-8x speedup)
+- f: Include fonts (disabled)
+- l: Compresses losslessly
 - q: Manual quality # for images
   - Quality #: Used by ffmpeg for images
 - c: Tries multiple ffmpeg setups to see which one compresses the file best
@@ -67,7 +68,7 @@ Ex:
 
 ```
 cprdir -yc
-cprdir -cqy 0
+cprdir -cyq 0
 ```
 
 
@@ -79,9 +80,10 @@ Flags:
 - h: Help
 - y: Ignores prompts and automatically says yes
 - b: Compress in a different directory (copies the entire directory over)
-- n: Prompts you for every single directory (overwrites y in it's cases)
 - v: Include videos (videos take a while)
-- f: Include fonts (requires fontconv)
+- g: Uses NVIDIA GPU for videos (~4-8x speedup)
+- f: Include fonts (disabled)
+- l: Compresses losslessly
 - q: Manual quality # for images
   - Quality #: Used by ffmpeg for images
 - c: Tries multiple ffmpeg setups to see which one compresses the file best
@@ -89,8 +91,8 @@ Flags:
 Ex:
 
 ```
-cprdirdir -ycn
-cprdirdir -cqy 0
+cprdirdir -yc
+cprdirdir -cbq 0
 ```
 
 

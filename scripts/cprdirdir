@@ -1,8 +1,10 @@
 #!/bin/bash
+
+# No e since underlying cprdir can fail, and we dont want the main controlling cprdirdir to fail due to that
 set -uo pipefail
 
 # Help command
-if [[ "${1-default}" == *"-h"* ]]; then
+usage() {
 	echo "Usage: cprdirdir [flags] [quality]"
 	echo "Trivial parallelization of cprdir. Opens up cprdir in all subdirectories."
 	echo
@@ -10,16 +12,58 @@ if [[ "${1-default}" == *"-h"* ]]; then
 	echo "	h - Displays help message"
 	echo "	y - Force yes"
 	echo "	v - Include video"
-	echo "	f - Include fonts"
+	echo "	g - Use NVIDIA GPU for video compression"
+	echo "	f - Include fonts (CURRENTLY DEACTIVATED LOOKING INTO NEW SOLUTION"
 	echo "	c - Use more cores to compress (CPU hell)"
-	echo "	q - Specified quality"
+	echo "	l - Compress lossless"
+    echo "	q - Specified quality (0 - 100, only for webp)"
 	echo "	b - Do it in a backup"
 	exit 1
-fi
+}
+
+# Argument parsing
+yes=false
+backup=false
+do_vid=false
+flags="-y"
+while getopts ":hybvfglcq:" opt; do
+	case $opt in
+		h) usage;;
+		y) yes=true;;
+		b) backup=true;;
+		v) flags=$flags" -v";;
+		g) flags=$flags" -g";;
+		f)
+			echo "Error: Font compression is currently deactivated until better solution is found.">&2
+			usage
+			if [[ -z "$(command -v fontconv)" ]]; then
+				echo "Error: Dependency \"fontconv\" not found if you wish to compress fonts please refer to README.md.">&2
+				usage
+			else
+				flags=$flags" -f"
+			fi
+			;;
+		c) flags=$flags" -c";;
+		l) flags=$flags" -l";;
+		q)
+			if [[ $OPTARG =~ ^[0-9]+$ ]]; then
+				flags=$flags" -q $OPTARG"
+			else
+				echo "Error: Quality value is not a number, \"$OPTARG\".">&2
+				usage
+			fi
+			;;
+		\?) echo "Error: Unknown flag \"$OPTARG\"">&2; usage;;
+		:)
+			echo "Error: Quality flag set, but quality value not specified.">&2
+			usage
+			;;
+	esac
+done
 
 # MAKING SURE
-if [[ "${1-default}" != *"-"*"y"* && "${1-default}" != *"-"*"b"* ]]; then
-	if [[ "${1-default}" != *"-"*"v"* ]]; then
+if ! $yes && ! $backup; then
+	if ! do_vid; then
 		echo "This will change images, and audio, found within:"
 	else
 		echo "This will change images, audio, and videos, found within:"
@@ -27,7 +71,8 @@ if [[ "${1-default}" != *"-"*"y"* && "${1-default}" != *"-"*"b"* ]]; then
 	echo "$(ls -d */)"
 	read -p "Are you sure you wish to proceed (y/n): " input
 	if [[ "$input" != "y" ]]; then
-		exit 0
+		echo "Did not get a \"y\", exiting."
+		usage
 	fi
 fi
 
@@ -38,30 +83,14 @@ killProcs() {
 	do
 		kill $pid
 	done
-	return
 }
 
 # Checking for backup
-dir_name="${PWD##*/}-compressed"
-if [[ "$1" == "-"*"b"* ]]; then
+if $backup; then
 	# Copy this directory into dir_name, we override already existing compressed dirs
-	cp -r . "../$dir_name"
+	dir_name="${PWD##*/}-compressed"
+	cp -rn . "../$dir_name"
 	cd "../$dir_name"
-fi
-
-# Managing flags
-flags="-y"
-if [[ "${1-default}" == *"-"*"v"* ]]; then
-	flags=$flags"v"
-fi
-if [[ "${1-default}" == *"-"*"f"* ]]; then
-	flags=$flags"f"
-fi
-if [[ "${1-default}" == *"-"*"c"* ]]; then
-	flags=$flags"c"
-fi
-if [[ "${1-default}" == *"-"*"q"* ]]; then
-	flags=$flags"q "$2 # If no 2 it should error
 fi
 
 # Starting cprs
@@ -73,21 +102,12 @@ goOn=true
 trap "killProcs" SIGTERM
 while read dir
 do
-	# This will prompt us for each directory
-	if [[ "${1-default}" == *"-"*"n"* ]]; then
-		read -p "Do you want to compress $dir (y/n): " yesNo
-		if ! [[ $yesNo == "y" ]]; then
-			goOn=false
-		fi
-	fi
-	# Checking if we're doing this directory
-	if [[ $goOn == true ]]; then
-		cd "${dir///}" # remove all instances of /
-		cprdir $flags & pid=$!
-		pids[${i}]=$pid
-		i=$((i + 1))
-		cd .. # Leave
-	fi
+	# Entering directory, and running cprdir
+	cd "${dir///}" # remove all instances of /
+	cprdir $flags & pid=$!
+	pids[${i}]=$pid
+	i=$((i + 1))
+	cd .. # Leave
 done < <(ls -1 -d */ )
 
 
